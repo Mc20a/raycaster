@@ -3,7 +3,10 @@
 #include <utility>
 #include <algorithm>
 #include <chrono>
-#include "libs/SDL2/include/SDL.h"
+#include <string>
+#include <thread>
+#include <SDL.h>
+#include <SDL_ttf.h>
 
 using namespace std;
 
@@ -31,6 +34,9 @@ const double speed = 1.5;
 int frameCount = 0;
 double fps = 0.0;
 auto lastFpsTime = chrono::system_clock::now();
+
+// Define sprint multiplier
+const float SPRINT_MULTIPLIER = 2.5f;
 
 /**
  * Calculates and returns the current FPS.
@@ -150,42 +156,152 @@ double rayCast(int x, const wstring& map) {
     return perpWallDist;
 }
 
-int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO); // Initialize SDL
-    
-    // Create SDL window
-    SDL_Window* window = SDL_CreateWindow("Raycaster", 
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        screenWidth, screenHeight, 0);
-    // Create SDL renderer
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+// Function to handle player movement
+void handleMovement(const Uint8* state, double& playerX, double& playerY, double moveSpeed, double elapsedTimeInSeconds) {
+    double currentSpeed = moveSpeed;
 
+    // Check if shift key is pressed
+    if (state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_RSHIFT]) {
+        currentSpeed *= SPRINT_MULTIPLIER;
+    }
+
+    double moveX = 0.0;
+    double moveY = 0.0;
+
+    if (state[SDL_SCANCODE_W]) {
+        moveX += cos(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+        moveY += sin(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+    }
+    if (state[SDL_SCANCODE_S]) {
+        moveX -= cos(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+        moveY -= sin(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+    }
+    if (state[SDL_SCANCODE_D]) {
+        moveX -= sin(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+        moveY += cos(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+    }
+    if (state[SDL_SCANCODE_A]) {
+        moveX += sin(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+        moveY -= cos(playerAngle) * currentSpeed * elapsedTimeInSeconds;
+    }
+    if (state[SDL_SCANCODE_LEFT]) {
+        playerAngle -= 2.0 * elapsedTimeInSeconds;
+    }
+    if (state[SDL_SCANCODE_RIGHT]) {
+        playerAngle += 2.0 * elapsedTimeInSeconds;
+    }
+
+    // Normalize the movement vector if moving diagonally
+    double length = sqrt(moveX * moveX + moveY * moveY);
+    if (length > 0) {
+        moveX /= length;
+        moveY /= length;
+        moveX *= currentSpeed * elapsedTimeInSeconds;
+        moveY *= currentSpeed * elapsedTimeInSeconds;
+    }
+
+    // Apply the movement
+    playerX += moveX;
+    playerY += moveY;
+}
+
+int main(int argc, char* argv[]) {
+    // Initialize SDL
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        cerr << "SDL_Init Error: " << SDL_GetError() << endl;
+        return 1;
+    }
+    cout << "SDL initialized successfully." << endl;
+
+    // Initialize SDL_ttf
+    if (TTF_Init() != 0) {
+        cerr << "TTF_Init Error: " << TTF_GetError() << endl;
+        SDL_Quit();
+        return 1;
+    }
+    cout << "SDL_ttf initialized successfully." << endl;
+
+    // Create a window
+    SDL_Window* window = SDL_CreateWindow("Raycaster", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, screenWidth, screenHeight, SDL_WINDOW_SHOWN);
+    if (window == nullptr) {
+        cerr << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
+        TTF_Quit();
+        SDL_Quit();
+        return 1;
+    }
+    cout << "Window created successfully." << endl;
+
+    // Create a renderer
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (renderer == nullptr) {
-        std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+        cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << endl;
+        SDL_DestroyWindow(window);
+        TTF_Quit();
+        SDL_Quit();
+        return 1;
+    }
+    cout << "Renderer created successfully." << endl;
+
+    // Load a font
+    TTF_Font* font = TTF_OpenFont("C:\\Users\\Bob\\projects\\raycaster\\fonts\\open-sans\\OpenSans-Bold.ttf", 24);
+    if (font == nullptr) {
+        cerr << "TTF_OpenFont Error: " << TTF_GetError() << endl;
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        TTF_Quit();
+        SDL_Quit();
+        return 1;
+    }
+    cout << "Font loaded successfully." << endl;
+
+    // Render text
+    SDL_Color color = {255, 255, 255, 255}; // White color
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Hello, World!", color);
+    if (textSurface == nullptr) {
+        cerr << "TTF_RenderText_Solid Error: " << TTF_GetError() << endl;
+        TTF_CloseFont(font);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        TTF_Quit();
+        SDL_Quit();
+        return 1;
+    }
+    cout << "Text rendered successfully." << endl;
+
+    // Create a texture from the surface
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    if (textTexture == nullptr) {
+        cerr << "SDL_CreateTextureFromSurface Error: " << SDL_GetError() << endl;
+        TTF_CloseFont(font);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        TTF_Quit();
+        SDL_Quit();
         return 1;
     }
 
     // Define the map
     wstring map;
-    map += L"################"; // 1
-    map += L"#........###...#"; // 2
-    map += L"#...#....###...#"; // 3
-    map += L"#...#..........#"; // 4
-    map += L"#...#####..##..#"; // 5
-    map += L"#......#....#..#"; // 6
-    map += L"#......#....#..#"; // 7
-    map += L"#......#....#..#"; // 8
-    map += L"###....##..##..#"; // 9
-    map += L"#..............#"; // 10
-    map += L"#..............#"; // 11
-    map += L"#.......#......#"; // 12
-    map += L"#.......#......#"; // 13
-    map += L"#....######....#"; // 14
-    map += L"#.........#....#"; // 15
-    map += L"################"; // 16
+    map += L"################";
+    map += L"#........###...#";
+    map += L"#...#....###...#";
+    map += L"#...#..........#";
+    map += L"#...#####..##..#";
+    map += L"#......#....#..#";
+    map += L"#......#....#..#";
+    map += L"#......#....#..#";
+    map += L"###....##..##..#";
+    map += L"#..............#";
+    map += L"#..............#";
+    map += L"#.......#......#";
+    map += L"#.......#......#";
+    map += L"#....######....#";
+    map += L"#.........#....#";
+    map += L"################";
 
     if (map[(int)playerY * mapWidth + (int)playerX] == '#') {
-        std::cerr << "Player starts inside a wall!" << std::endl;
+        cerr << "Player starts inside a wall!" << endl;
         return 1;
     }
 
@@ -211,59 +327,17 @@ int main(int argc, char* argv[]) {
         // Get the current state of the keyboard
         const Uint8* state = SDL_GetKeyboardState(NULL);
 
-        double cosPlayerAngle = cos(playerAngle);
-        double sinPlayerAngle = sin(playerAngle);
-
-        double moveX = 0.0;
-        double moveY = 0.0;
-
-        if (state[SDL_SCANCODE_W]) {
-            moveX += cos(playerAngle) * speed * elapsedTimeInSeconds;
-            moveY += sin(playerAngle) * speed * elapsedTimeInSeconds;
-        }
-        if (state[SDL_SCANCODE_S]) {
-            moveX -= cos(playerAngle) * speed * elapsedTimeInSeconds;
-            moveY -= sin(playerAngle) * speed * elapsedTimeInSeconds;
-        }
-        if (state[SDL_SCANCODE_D]) {
-            moveX -= sin(playerAngle) * speed * elapsedTimeInSeconds;
-            moveY += cos(playerAngle) * speed * elapsedTimeInSeconds;
-        }
-        if (state[SDL_SCANCODE_A]) {
-            moveX += sin(playerAngle) * speed * elapsedTimeInSeconds;
-            moveY -= cos(playerAngle) * speed * elapsedTimeInSeconds;
-        }
-
-        // Normalize the movement vector if moving diagonally
-        double length = sqrt(moveX * moveX + moveY * moveY);
-        if (length > 0) {
-            moveX /= length;
-            moveY /= length;
-            moveX *= speed * elapsedTimeInSeconds;
-            moveY *= speed * elapsedTimeInSeconds;
-        }
-
-        // Apply the movement
-        playerX += moveX;
-        playerY += moveY;
+        handleMovement(state, playerX, playerY, speed, elapsedTimeInSeconds);
 
         // Collision detection
         if (map.c_str()[(int)playerY * mapWidth + (int)playerX] == '#') {
-            playerX -= moveX;
-            playerY -= moveY;
+            playerX -= cos(playerAngle) * speed * elapsedTimeInSeconds;
+            playerY -= sin(playerAngle) * speed * elapsedTimeInSeconds;
         }
 
-        if (state[SDL_SCANCODE_LEFT]) {
-            // Rotate left
-            playerAngle -= (speed * 0.75f) * elapsedTimeInSeconds;
-        }
-        if (state[SDL_SCANCODE_RIGHT]) {
-            // Rotate right
-            playerAngle += (speed * 0.75f) * elapsedTimeInSeconds;
-        }
-        
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Set background color to black
-        SDL_RenderClear(renderer); // Clear the screen
+        // Clear the screen
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
 
         // Render the scene
         for (int x = 0; x < screenWidth; x++) {
@@ -273,19 +347,43 @@ int main(int argc, char* argv[]) {
             renderWallsAndFloor(renderer, fDistanceToWall, nCeiling, nFloor, x, false); // Render walls and floor
         }
 
-        SDL_RenderPresent(renderer); // Present the rendered frame
+        // Render the FPS
+        double fps = getFps();
+        string fpsText = "FPS: " + to_string(static_cast<int>(fps));
+        SDL_Color textColor = {255, 255, 255, 255}; // White color
 
-        // Clear the console and print the FPS
-        system("cls");
-        cout << "FPS: " << getFps() << endl;
+        SDL_Surface* textSurface = TTF_RenderText_Solid(font, fpsText.c_str(), textColor);
+        if (textSurface == nullptr) {
+            cerr << "TTF_RenderText_Solid Error: " << TTF_GetError() << endl;
+        } else {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            if (textTexture == nullptr) {
+                cerr << "SDL_CreateTextureFromSurface Error: " << SDL_GetError() << endl;
+            } else {
+                SDL_Rect textRect = {10, 10, textSurface->w, textSurface->h}; // Position and size of the text
+                SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+                SDL_DestroyTexture(textTexture);
+            }
+            SDL_FreeSurface(textSurface);
+        }
+
+        // Present the rendered frame
+        SDL_RenderPresent(renderer);
     }
 
-    // Clean up SDL resources
+    // Cleanup
+    SDL_DestroyTexture(textTexture);
+    TTF_CloseFont(font);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
 
     renderer = nullptr;
     window = nullptr;
+    TTF_Quit(); // Quit SDL_ttf
     SDL_Quit(); // Quit SDL
+
+    cout << "Program finished. Exiting in 3 seconds..." << endl;
+    this_thread::sleep_for(chrono::seconds(3));
+
     return 0; // Return success
 }
