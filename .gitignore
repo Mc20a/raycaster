@@ -1,0 +1,43 @@
+# Ignore Visual Studio Code settings
+.vscode/
+
+# Ignore build artifacts
+build/
+
+# CMake specific files and directories
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+
+# Compiler and linker output
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.lib
+*.so
+*.dylib
+*.a
+
+# Logs and temporary files
+*.log
+*.tmp
+*.tlog
+*.bak
+
+# Ignore Debug directories
+Debug/
+raycaster.dir/
+x64/
+
+# Library files (optional, adjust if you want to track SDL2 source)
+libs/SDL2/cmake/
+libs/SDL2/docs/
+libs/SDL2/lib/
+
+# System and miscellaneous
+.DS_Store
+Thumbs.db
